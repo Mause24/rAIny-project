@@ -36,6 +36,7 @@ model.h5
 *.keras
 checkpoints/
 saved_model/
+models/
 
 # Archivos de sistema operativo
 .DS_Store

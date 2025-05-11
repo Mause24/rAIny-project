@@ -1,51 +1,58 @@
 # 🌧️ rAIny – Predicción de Lluvia con Inteligencia Artificial
 
-**rAIny** es un proyecto de Machine Learning que busca predecir si habrá precipitación (lluvia) en un lugar específico, utilizando variables climáticas históricas como temperatura, humedad y velocidad del viento.
+**rAIny** es un proyecto de Machine Learning que predice la **probabilidad de lluvia** en un lugar específico utilizando variables climáticas históricas como temperatura, humedad, radiación solar y velocidad del viento.
 
-Este modelo está enfocado en datos recopilados en **Ponedera, Atlántico (Colombia)** durante los años **2020 a 2021**.
+Este modelo se enfoca en datos de **Ponedera, Atlántico (Colombia)** y actualmente usa registros desde el año **2015 hasta la actualidad**, integrados desde múltiples archivos.
 
 ---
 
 ## 📌 Objetivo
 
-Entrenar un modelo de clasificación binaria que diga si **lloverá o no**, con base en datos meteorológicos.
+Entrenar una red neuronal capaz de predecir la **probabilidad de precipitación**, expresada como un porcentaje entre 0% y 100%, en lugar de una simple clasificación binaria (sí/no).
 
 ---
 
 ## 🧠 ¿Cómo funciona?
 
-1. Se cargan datos históricos en formato CSV (`rAIny_training_dataset.csv`).
-2. Se preprocesan los datos: limpieza, selección de características, y normalización.
-3. Se construye un modelo de clasificación usando una red neuronal simple con TensorFlow.
-4. Se entrena el modelo para predecir si **lloverá o no**.
-5. Se evalúa el rendimiento del modelo con métricas como precisión, matriz de confusión y curva ROC.
+1. Se cargan múltiples datasets CSV desde la carpeta `data/`, con separador `;`.
+2. Se preprocesan los datos: limpieza, eliminación de valores nulos, selección de características y normalización.
+3. Se define una red neuronal profunda con capas densas, regularización L2 y Dropout.
+4. Se entrena el modelo para predecir la probabilidad de lluvia.
+5. Se evalúa el rendimiento del modelo con métricas como precisión, recall, f1-score, y matriz de confusión.
+6. Se guarda el modelo y el escalador para uso futuro.
 
 ---
 
 ## 🔍 Dataset
 
-El conjunto de datos se encuentra en el archivo `rAIny_training_dataset.csv`, y contiene variables como:
+Los datos meteorológicos incluyen las siguientes variables:
 
-- `temperatura_media`
-- `humedad_relativa`
-- `velocidad_viento`
-- `presion`
-- `precipitacion` (valor binario: 1 si llueve, 0 si no)
-
-Todos los datos corresponden a registros tomados en Ponedera (Atlántico, Colombia) entre 2020 y 2021.
+- `T2M`: Temperatura a 2 metros (°C)
+- `WS2M`: Velocidad del viento a 2 metros (m/s)
+- `QV2M`: Humedad específica a 2 metros (g/kg)
+- `RH2M`: Humedad relativa (%)
+- `ALLSKY_SFC_SW_DWN`: Irradiancia solar (MJ/m²/día)
+- `PS`: Presión superficial (kPa)
+- `PRECTOTCORR`: Acumulación de precipitación corregida (usada para generar la etiqueta `GRP`)
 
 ---
 
 ## 📁 Estructura del Proyecto
 
-````plaintext
+```plaintext
 rAIny/
-├── venv310/                   # Entorno virtual (NO incluir en producción)
-├──data/
-├────── rAIny_training_dataset.csv # Dataset con variables climáticas
-├── main.py                    # Código principal de entrenamiento y evaluación
-├── requirements.txt           # Lista de dependencias
-└── README.md                  # Documentación del proyecto
+├── venv*/                         # Entorno virtual (excluido en .gitignore)
+├── data/                          # Datasets CSV por año (2015 a hoy)
+│   ├── rAIny_training_dataset_2015.csv
+│   ├── ...
+├── models/                        # Modelos .h5 y escaladores .joblib guardados
+│   ├── rAIny_model_YYYY-MM-DD_HH-MM.h5
+│   ├── scaler_YYYY-MM-DD_HH-MM.joblib
+├── main.py                        # Código principal de entrenamiento
+├── predict.py                     # Script para predicción con nuevos datos
+├── requirements.txt               # Dependencias del proyecto
+└── README.md                      # Documentación del proyecto
+```
 
 ---
 
@@ -53,17 +60,19 @@ rAIny/
 
 - Python 3.10
 - pip (gestor de paquetes)
-- Entorno virtual (`venv`)
+- joblib
+- TensorFlow 2.x
 
 ---
 
-## 🛠️ Tecnologías utilizadas
+## ⚙️ Tecnologías utilizadas
 
 - **Python 3.10**
-- **TensorFlow** – Red neuronal para clasificación binaria
-- **pandas & numpy** – Manipulación de datos
-- **scikit-learn** – Métricas de evaluación
-- **matplotlib** – Visualización de resultados
+- **TensorFlow** – Red neuronal con Keras
+- **pandas & numpy** – Procesamiento de datos
+- **scikit-learn** – Escalado y métricas
+- **matplotlib** – Visualización de entrenamiento
+- **joblib** – Serialización del escalador
 
 ---
 
@@ -72,26 +81,32 @@ rAIny/
 1. Clona o descarga este repositorio.
 2. Crea y activa un entorno virtual:
    ```bash
-   python -m venv venv310
-   # En Windows:
-   ./venv310/Scripts/activate
-   # En macOS/Linux:
-   source venv310/bin/activate
-3. Instala los paquetes necesarios:
+   python -m venv venv
+   ./venv/Scripts/activate  # Windows
+   source venv/bin/activate  # macOS/Linux
+   ```
+3. Instala las dependencias:
    ```bash
    pip install -r requirements.txt
-4. Ejecuta el programa:
+   ```
+4. Ejecuta el entrenamiento:
+   ```bash
+   python train.py
+   ```
+5. Ejecuta el modelo ya entrenado con datos de prueba:
    ```bash
    python main.py
+   ```
+
+---
 
 ## ✅ Resultados Esperados
 
-El script `main.py` genera una evaluación del modelo incluyendo:
-
-- Accuracy (Precisión)
-- Matriz de confusión
-- Gráfica de pérdida y precisión durante el entrenamiento
-- Curva ROC
+- Entrenamiento con regularización y prevención de sobreajuste (`Dropout`, `L2`, `EarlyStopping`)
+- Predicción de probabilidad de lluvia para nuevas muestras
+- Visualización de pérdida y precisión
+- Matriz de confusión y métricas (accuracy, precision, recall, f1-score)
+- Guardado automático del modelo y escalador con fecha y hora
 
 ---
 
@@ -99,5 +114,3 @@ El script `main.py` genera una evaluación del modelo incluyendo:
 
 - **Omar Arenas**
 - **Carlos Duran**
-
-````
