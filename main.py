@@ -13,6 +13,7 @@ import tensorflow as tf
 import numpy as np
 import random
 import os
+import glob
 
 # Semilla global para reproducibilidad
 seed = 73
@@ -25,34 +26,43 @@ tf.random.set_seed(seed)
 # 1. Leer el dataset y transformarlo en Dataframe con pandas
 # ===============================
 
-DATA_PATH = "data/rAIny_training_dataset.csv"
-df = pd.read_csv(DATA_PATH)
+# Ruta a todos los CSVs
+dataset_paths = glob.glob("data/rAIny_training_dataset_*.csv")
 
+# Leer todos los datasets en una lista
+dfs = [pd.read_csv(path, delimiter=";") for path in dataset_paths]
+
+# Concatenar todos en un solo DataFrame
+df = pd.concat(dfs, ignore_index=True)
+
+# Reemplazar valores faltantes (-999) por NaN
+df.replace(-999, np.nan, inplace=True)
+
+# Opcional: eliminar filas con valores faltantes
+df.dropna(inplace=True)
 
 # ===============================
-# 2. Definir la variable de clasde IGR mediante un parametro binario (Llovio o no)
+# 2. Definir la variable de clasde GRP mediante un parametro binario (Llovio o no)
 # ===============================
+print(df)
+df["GRP"] = (df["PRECTOTCORR"] > 0.1).astype(int)
 
-df["IGR"] = (df["PRECTOTCORR"] > 0.1).astype(int)
-
+print(df["GRP"].value_counts())
 # ===============================
 # 3. Definir las variables independientes que va a tomar el modelo para realizar la prediccion
 # ===============================
 
 features = [
-    "ALLSKY_SFC_PAR_TOT",  # Radiación solar
-    "T2M_MAX",  # Temp. máxima
-    "T2M_MIN",  # Temp. mínima
-    "T2M",  # Temp. media
+    "T2M",  # Temperatura a 2 m
+    "WS2M",  # Vel. viento a 2 m
+    "QV2M",  # Humedad específica
     "RH2M",  # Humedad relativa
-    "WS2M",  # Vel. viento media
-    "WS2M_MAX",  # Vel. viento máx.
-    "WS2M_MIN",  # Vel. viento mín.
+    "ALLSKY_SFC_SW_DWN",  # Irradiancia solar
     "PS",  # Presión superficial
 ]
 
 X = df[features]
-y = df["IGR"]
+y = df["GRP"]
 
 # ===============================
 # 4. Normalizar y dividir los datos
@@ -81,9 +91,22 @@ X_train, X_test, y_train, y_test = train_test_split(
 model = models.Sequential()
 
 # Capa de entrada + capa 1 oculta
-model.add(layers.Dense(64, activation="relu", input_shape=(X_train.shape[1],)))
+model.add(layers.Dense(256, activation="relu", input_shape=(X_train.shape[1],)))
+
+# Capa 1 oculta
+model.add(
+    layers.Dense(
+        128, activation="relu", kernel_regularizer=tf.keras.regularizers.l2(0.001)
+    )
+)
 
 # Capa 2 oculta
+model.add(layers.Dense(64, activation="relu"))
+
+# Dropout para regular el tema del overfitting
+model.add(layers.Dropout(0.3))
+
+# Capa 3 oculta
 model.add(layers.Dense(32, activation="relu"))
 
 # Capa de salida: un solo valor entre 0 y 1
@@ -99,19 +122,19 @@ model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"]
 # Parada temprana más tolerante
 early_stop = EarlyStopping(
     monitor="val_loss",  # Observa la pérdida del conjunto de validación
-    patience=30,  # Permite más épocas sin mejora
+    patience=80,  # Permite más épocas sin mejora
     restore_best_weights=True,  # Recupera los mejores pesos
 )
 
 # (Opcional) Ajuste de pesos de clase si es necesario
-class_weight = {0: 1.4, 1: 1.0}  # Ligeramente más peso a la clase No Lluvia
+class_weight = {0: 1.9, 1: 1.0}
 
 # Entrenar el modelo
 history = model.fit(
     X_train,
     y_train,
-    epochs=150,  # Más épocas para refinar el aprendizaje
-    batch_size=16,  # Tamaño de mini-lote
+    epochs=350,  # Más épocas para refinar el aprendizaje
+    batch_size=128,  # Tamaño de mini-lote
     validation_data=(X_test, y_test),
     callbacks=[early_stop],
     class_weight=class_weight,  # Activado
@@ -125,12 +148,11 @@ history = model.fit(
 # 1. Obtener predicciones en el conjunto de prueba
 y_pred_prob = model.predict(X_test)
 
-# 2. Convertir probabilidades a clases (0 o 1) usando umbral de 0.5
-# 2. Ajustar umbral para mejorar desempeño
+# Evaluación binaria (opcional, para métricas tradicionales)
 umbral = 0.45
 y_pred = (y_pred_prob > umbral).astype(int).flatten()
 
-# 3. Mostrar matriz de confusión
+# Matriz de confusión
 print("\nMatriz de Confusión:")
 cm = confusion_matrix(y_test, y_pred)
 disp = ConfusionMatrixDisplay(
@@ -138,12 +160,12 @@ disp = ConfusionMatrixDisplay(
 )
 disp.plot(cmap="Blues")
 
-# 4. Reporte completo con precision, recall y F1-score
-print("\nReporte de Clasificación:")
+# Reporte de métricas
+print(f"\nReporte de Clasificación (umbral = {umbral}):")
 print(classification_report(y_test, y_pred, target_names=["No Lluvia", "Lluvia"]))
 
 # ===============================
-# 7. Gráficas de entrenamiento
+# 8. Gráficas de entrenamiento
 # ===============================
 
 # Pérdida (loss)
@@ -168,3 +190,11 @@ plt.legend()
 
 plt.tight_layout()
 plt.show()
+
+# ===============================
+# 9. Mostrar primeras predicciones probabilísticas
+# ===============================
+
+print("\nEjemplos de probabilidad de lluvia en el conjunto de prueba:")
+for i, prob in enumerate(y_pred_prob[:10]):
+    print(f"Muestra {i+1}: {prob[0]*100:.2f}% de probabilidad de lluvia")
