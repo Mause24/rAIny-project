@@ -9,6 +9,7 @@ from sklearn.metrics import (
 import matplotlib.pyplot as plt
 from tensorflow.keras import models, layers
 from tensorflow.keras.callbacks import EarlyStopping
+from sklearn.metrics import recall_score
 import tensorflow as tf
 import numpy as np
 import joblib
@@ -165,6 +166,10 @@ disp.plot(cmap="Blues")
 # Reporte de métricas
 print(f"\nReporte de Clasificación (umbral = {umbral}):")
 print(classification_report(y_test, y_pred, target_names=["No Lluvia", "Lluvia"]))
+
+
+sensitivity = recall_score(y_test, y_pred, pos_label=1)
+print(f"Sensitivity (Lluvia): {sensitivity:.4f}")
 
 # ===============================
 # 8. Gráficas de entrenamiento
