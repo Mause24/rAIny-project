@@ -1,29 +1,36 @@
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import (
-    classification_report,
-    confusion_matrix,
-    ConfusionMatrixDisplay,
-)
-import matplotlib.pyplot as plt
-from tensorflow.keras import models, layers
-from tensorflow.keras.callbacks import EarlyStopping
-from sklearn.metrics import recall_score
 import tensorflow as tf
 import numpy as np
 import joblib
 import random
 import os
 import glob
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+    recall_score,
+    roc_auc_score,
+    roc_curve,
+    precision_recall_curve,
+    average_precision_score,
+    brier_score_loss,
+)
+from sklearn.calibration import calibration_curve
+import matplotlib.pyplot as plt
+from tensorflow.keras import models, layers
+from tensorflow.keras.callbacks import EarlyStopping
+
 from datetime import datetime
 
 # Semilla global para reproducibilidad
-seed = 73
-os.environ["PYTHONHASHSEED"] = str(seed)
-np.random.seed(seed)
-random.seed(seed)
-tf.random.set_seed(seed)
+# seed = 73
+# os.environ["PYTHONHASHSEED"] = str(seed)
+# np.random.seed(seed)
+# random.seed(seed)
+# tf.random.set_seed(seed)
 
 # ===============================
 # 1. Leer el dataset y transformarlo en Dataframe con pandas
@@ -148,6 +155,15 @@ history = model.fit(
 # 7. Evaluación con métricas
 # ===============================
 
+
+def expected_calibration_error(y_true, y_prob, n_bins=10):
+    prob_true, prob_pred = calibration_curve(y_true, y_prob, n_bins=n_bins)
+    bin_counts = np.histogram(y_prob, bins=n_bins)[0]
+    bin_weights = bin_counts / np.sum(bin_counts)
+    ece = np.sum(bin_weights * np.abs(prob_true - prob_pred))
+    return ece
+
+
 # 1. Obtener predicciones en el conjunto de prueba
 y_pred_prob = model.predict(X_test)
 
@@ -156,16 +172,72 @@ umbral = 0.45
 y_pred = (y_pred_prob > umbral).astype(int).flatten()
 
 # Matriz de confusión
-print("\nMatriz de Confusión:")
+print("\nConfussion Matrix:")
 cm = confusion_matrix(y_test, y_pred)
-disp = ConfusionMatrixDisplay(
-    confusion_matrix=cm, display_labels=["No Lluvia", "Lluvia"]
-)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["No Rain", "Rain"])
 disp.plot(cmap="Blues")
 
 # Reporte de métricas
-print(f"\nReporte de Clasificación (umbral = {umbral}):")
-print(classification_report(y_test, y_pred, target_names=["No Lluvia", "Lluvia"]))
+print(f"\nClassfication report (threshold = {umbral}):")
+print(classification_report(y_test, y_pred, target_names=["No rain", "Rain"]))
+
+# Calcular ROC-AUC
+roc_auc = roc_auc_score(y_test, y_pred_prob)
+print(f"\nROC-AUC: {roc_auc:.4f}")
+
+# Calcular puntos ROC
+fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
+
+# Graficar la curva ROC
+plt.figure(figsize=(6, 6))
+plt.plot(fpr, tpr, label=f"ROC curve (AUC = {roc_auc:.2f})")
+plt.plot([0, 1], [0, 1], "k--", label="Random model")
+plt.xlabel("False Positive Rate(FPR)")
+plt.ylabel("Tasa de verdaderos positivos (TPR)")
+plt.title("ROC Curve")
+plt.legend()
+plt.show()
+
+# Calcular la curva y el área
+precision, recall, thresholds = precision_recall_curve(y_test, y_pred_prob)
+pr_auc = average_precision_score(y_test, y_pred_prob)
+
+print(f"PR-AUC: {pr_auc:.4f}")
+
+# Graficar
+plt.figure(figsize=(6, 6))
+plt.plot(recall, precision, label=f"PR curve (AUC = {pr_auc:.2f})")
+plt.xlabel("Recall")
+plt.ylabel("Precision")
+plt.title("Precision-Recall Curve")
+plt.legend()
+plt.show()
+
+brier = brier_score_loss(y_test, y_pred_prob)
+print(f"Brier Score: {brier:.4f}")
+
+# Calcular el modelo base (predice probabilidad promedio)
+p_ref = np.mean(y_test)
+brier_base = brier_score_loss(y_test, np.full_like(y_test, p_ref))
+bss = 1 - (brier / brier_base)
+print(f"Brier Skill Score (BSS): {bss:.4f}")
+
+
+# Calcular la curva de calibración
+prob_true, prob_pred = calibration_curve(y_test, y_pred_prob, n_bins=10)
+
+# Graficar
+plt.figure(figsize=(6, 6))
+plt.plot(prob_pred, prob_true, marker="o", label="Model")
+plt.plot([0, 1], [0, 1], "k--", label="Perfectly Calibrated")
+plt.xlabel("Average predicted probability")
+plt.ylabel("Observed Frequency")
+plt.title("Reliability Diagram")
+plt.legend()
+plt.show()
+
+ece = expected_calibration_error(y_test, y_pred_prob)
+print(f"Expected Calibration Error (ECE): {ece:.4f}")
 
 
 sensitivity = recall_score(y_test, y_pred, pos_label=1)
@@ -179,32 +251,33 @@ print(f"Sensitivity (Lluvia): {sensitivity:.4f}")
 plt.figure(figsize=(12, 5))
 
 plt.subplot(1, 2, 1)
-plt.plot(history.history["loss"], label="Entrenamiento")
-plt.plot(history.history["val_loss"], label="Validación")
-plt.title("Pérdida (Loss)")
-plt.xlabel("Épocas")
-plt.ylabel("Pérdida")
+plt.plot(history.history["loss"], label="Training")
+plt.plot(history.history["val_loss"], label="Validation")
+plt.title("Loss")
+plt.xlabel("Epochs")
+plt.ylabel("Losts")
 plt.legend()
 
 # Precisión (accuracy)
 plt.subplot(1, 2, 2)
-plt.plot(history.history["accuracy"], label="Entrenamiento")
-plt.plot(history.history["val_accuracy"], label="Validación")
-plt.title("Precisión (Accuracy)")
-plt.xlabel("Épocas")
-plt.ylabel("Precisión")
+plt.plot(history.history["accuracy"], label="Training")
+plt.plot(history.history["val_accuracy"], label="Validation")
+plt.title("Accuracy")
+plt.xlabel("Epochs")
+plt.ylabel("Precision")
 plt.legend()
 
 plt.tight_layout()
 plt.show()
 
 # ===============================
-# 9. Mostrar primeras predicciones probabilísticas
+# 9. Mostrar primeras predicciones probabilísticasñan
+#
 # ===============================
 
-print("\nEjemplos de probabilidad de lluvia en el conjunto de prueba:")
+print("\nExamples of rain probability of the test group:")
 for i, prob in enumerate(y_pred_prob[:10]):
-    print(f"Muestra {i+1}: {prob[0]*100:.2f}% de probabilidad de lluvia")
+    print(f"Sample {i+1}: {prob[0]*100:.2f}% rain probability")
 
 
 # ===============================
@@ -219,13 +292,13 @@ fecha_hora = datetime.now().strftime("%Y-%m-%d_%H-%M")
 nombre_archivo = f"rAIny_model_{fecha_hora}.h5"
 
 # Guardar el modelo
-model.save(f"models/{nombre_archivo}")
-print(f"Modelo guardado como: models/{nombre_archivo}")
+# model.save(f"models/{nombre_archivo}")
+# print(f"Saved model as: models/{nombre_archivo}")
 
 # ===============================
 # 11. Guardar el escalador StandardScaler
 # ===============================
 
-scaler_filename = f"models/scaler_{fecha_hora}.joblib"
-joblib.dump(scaler, scaler_filename)
-print(f"✅ Escalador guardado como: {scaler_filename}")
+# scaler_filename = f"models/scaler_{fecha_hora}.joblib"
+# joblib.dump(scaler, scaler_filename)
+# print(f"✅ Scaler saved as: {scaler_filename}")

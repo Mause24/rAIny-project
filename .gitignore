@@ -23,8 +23,6 @@ ENV/
 .ipynb_checkpoints/
 
 # Datos y salidas temporales
-*.csv
-*.xlsx
 *.h5
 *.log
 *.tmp

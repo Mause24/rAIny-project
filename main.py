@@ -3,8 +3,8 @@ import joblib
 import numpy as np
 
 # Cargar modelo y escalador
-modelo = load_model("models/rAIny_model_2025-05-11_10-14.h5")
-scaler = joblib.load("models/scaler_2025-05-11_10-14.joblib")
+modelo = load_model("models/rAIny_model_2025-11-10_13-58.h5")
+scaler = joblib.load("models/scaler_2025-11-10_13-58.joblib")
 
 # Datos nuevos (sin escalar)
 nuevos_datos = np.array([[27.3, 2.1, 14.2, 80.0, 18.5, 101.2]])
