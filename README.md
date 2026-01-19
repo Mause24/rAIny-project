@@ -2,13 +2,13 @@
 
 **rAIny** es un proyecto de Machine Learning que predice la **probabilidad de lluvia** en un lugar específico utilizando variables climáticas históricas como temperatura, humedad, radiación solar y velocidad del viento.
 
-Este modelo se enfoca en datos de **Ponedera, Atlántico (Colombia)** y actualmente usa registros desde el año **2015 hasta la actualidad**, integrados desde múltiples archivos.
+Este modelo se enfoca en datos del **Sur del departamento Atlántico (Colombia)** y actualmente usa registros desde el año **2015 hasta la actualidad**, integrados desde múltiples archivos.
 
 ---
 
 ## 📌 Objetivo
 
-Entrenar una red neuronal capaz de predecir la **probabilidad de precipitación**, expresada como un porcentaje entre 0% y 100%, en lugar de una simple clasificación binaria (sí/no).
+Entrenar una red neuronal capaz de predecir la **probabilidad de precipitación**, expresada como un porcentaje entre 0% y 100%
 
 ---
 
